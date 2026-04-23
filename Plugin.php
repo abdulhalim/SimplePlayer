@@ -2,22 +2,29 @@
 if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
 /**
- * پخش کننده پیرشفته و مینیمال موسیقی برای تایپ‌چو 
+ * پخش کننده پیشرفته و مینیمال موسیقی برای تایپ‌چو 
+ * 
  * 
  * @package SimplePlayer
  * @author پوردریایی
  * @link https://pourdaryaei.ir
- * @version 1.0
+ * @version 1.3
  */
 class SimplePlayer_Plugin implements Typecho_Plugin_Interface
 {
     public static function activate()
     {
+        // ثبت هوک‌های محتوا
         Typecho_Plugin::factory('Widget_Abstract_Contents')->contentEx = array('SimplePlayer_Plugin', 'parseContent');
         Typecho_Plugin::factory('Widget_Abstract_Contents')->excerptEx = array('SimplePlayer_Plugin', 'parseContent');
         Typecho_Plugin::factory('Widget_Archive')->header = array('SimplePlayer_Plugin', 'header');
         Typecho_Plugin::factory('Widget_Archive')->footer = array('SimplePlayer_Plugin', 'footer');
-        return _t('پلاگین با موفقیت فعال شد');
+        
+        // اضافه کردن دکمه به ویرایشگر
+        Typecho_Plugin::factory('admin/write-post.php')->bottom = array('SimplePlayer_Plugin', 'addEditorButton');
+        Typecho_Plugin::factory('admin/write-page.php')->bottom = array('SimplePlayer_Plugin', 'addEditorButton');
+        
+        return _t('پلاگین SimplePlayer نسخه 2.3 با موفقیت فعال شد');
     }
 
     public static function deactivate()
@@ -72,12 +79,11 @@ class SimplePlayer_Plugin implements Typecho_Plugin_Interface
         echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aplayer/1.10.1/APlayer.min.css" />';
         echo '<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">';
         
-        // استایل سفارشی برای راست‌چین بودن سایت و جدول‌بندی لیست پخش
+        // استایل سفارشی
         echo '<style>
             .aplayer {
-                direction: ltr; /* کل پلیر چپ‌چین شود */
+                direction: ltr;
             }
-            /* بخش پخش‌کننده اصلی */
             .aplayer .aplayer-music .aplayer-title,
             .aplayer .aplayer-music .aplayer-artist {
                 direction: rtl;
@@ -85,16 +91,15 @@ class SimplePlayer_Plugin implements Typecho_Plugin_Interface
                 display: inline-block;
             }
             .aplayer .aplayer-music .aplayer-title {
-                margin-left: 8px; /* فاصله بین عنوان و هنرمند */
+                margin-left: 8px;
             }
             .aplayer .aplayer-pic {
-                width: 90px;  /* افزایش عرض کاور */
-                height: 90px; /* افزایش ارتفاع کاور */
+                width: 90px;
+                height: 90px;
             }
             .aplayer .aplayer-info {
-                height: 90px; /* هماهنگی ارتفاع بخش اطلاعات با کاور */
+                height: 90px;
             }
-            /* لیست پخش با ساختار جدولی */
             .aplayer-list {
                 direction: ltr;
             }
@@ -111,7 +116,7 @@ class SimplePlayer_Plugin implements Typecho_Plugin_Interface
                 text-align: left;
             }
             .aplayer-list-item .aplayer-list-title {
-                flex: 2; /* دو برابر فضای بیشتر برای عنوان */
+                flex: 2;
                 direction: rtl;
                 text-align: right;
                 white-space: nowrap;
@@ -121,7 +126,7 @@ class SimplePlayer_Plugin implements Typecho_Plugin_Interface
                 font-weight: 500;
             }
             .aplayer-list-item .aplayer-list-artist {
-                flex: 1; /* یک برابر فضا برای هنرمند */
+                flex: 1;
                 direction: rtl;
                 text-align: right;
                 white-space: nowrap;
@@ -141,8 +146,8 @@ class SimplePlayer_Plugin implements Typecho_Plugin_Interface
             }
             .aplayer .aplayer-list ol li, .aplayer .aplayer-info .aplayer-music{
                 text-align: left;
+                font-family: "Vazirmatn", sans-serif;
             }
-            /* در موبایل برای فضاهای کوچک */
             @media (max-width: 600px) {
                 .aplayer-list-item .aplayer-list-title,
                 .aplayer-list-item .aplayer-list-artist {
@@ -166,16 +171,57 @@ class SimplePlayer_Plugin implements Typecho_Plugin_Interface
                 }
             }
         </style>';
+        
+        // اضافه کردن استایل مودال در پنل ادمین
+        if (defined('__TYPECHO_ADMIN__')) {
+            echo '<link rel="stylesheet" type="text/css" href="' . Helper::options()->pluginUrl . '/SimplePlayer/css/editor-modal.css" />' . "\n";
+        }
     }
 
     public static function footer()
     {
         echo '<script src="https://cdnjs.cloudflare.com/ajax/libs/aplayer/1.10.1/APlayer.min.js"></script>';
     }
+    
+    /**
+     * اضافه کردن دکمه به ویرایشگر
+     */
+    public static function addEditorButton()
+    {
+        $script = basename($_SERVER['SCRIPT_NAME']);
+        if (!in_array($script, array('write-post.php', 'write-page.php'))) {
+            return;
+        }
+        
+        $options = Helper::options();
+        $pluginUrl = $options->pluginUrl . '/SimplePlayer';
+        
+        // استفاده از فایل ajax.php مستقیم (بدون نیاز به روتر تایپچو)
+        $ajaxUrl = $pluginUrl . '/ajax.php';
+        
+        // تزریق متغیرهای مورد نیاز به JavaScript
+        echo '<script>';
+        echo 'var SimplePlayerConfig = {';
+        echo '  pluginUrl: "' . $pluginUrl . '",';
+        echo '  ajaxUrl: "' . $ajaxUrl . '"';
+        echo '};';
+        echo '</script>' . "\n";
+        
+        echo '<script src="' . $pluginUrl . '/js/editor-button.js?v=2.3"></script>' . "\n";
+    }
 
     public static function parseContent($content, $widget, $lastResult)
     {
         $content = empty($lastResult) ? $content : $lastResult;
+        
+        if (empty($content)) {
+            return $content;
+        }
+        
+        if (strpos($content, '[player]') === false) {
+            return $content;
+        }
+        
         $pattern = '/\[player\](.*?)\[\/player\]/is';
 
         $content = preg_replace_callback($pattern, function($matches) {
@@ -184,7 +230,6 @@ class SimplePlayer_Plugin implements Typecho_Plugin_Interface
                 return '<p style="color:red;">[player] محتوای خالی است</p>';
             }
 
-            // تبدیل <br> به خط جدید و حذف تگ‌های اضافی
             $inner = preg_replace('/<br\s*\/?>/i', "\n", $inner);
             $inner = strip_tags($inner, '<a>');
             $lines = preg_split('/\r\n|\r|\n/', $inner);
@@ -194,11 +239,9 @@ class SimplePlayer_Plugin implements Typecho_Plugin_Interface
                 $line = trim($line);
                 if ($line === '') continue;
 
-                // استخراج آدرس‌های داخل <a>
                 preg_match_all('/<a\s+[^>]*href="([^"]+)"[^>]*>/i', $line, $anchorMatches);
                 $urls = $anchorMatches[1];
 
-                // حذف تگ‌ها برای به‌دست آوردن متن ساده
                 $plain = strip_tags($line);
                 $parts = explode('|', $plain);
                 if (count($parts) < 3) continue;
@@ -208,7 +251,6 @@ class SimplePlayer_Plugin implements Typecho_Plugin_Interface
                 $artist = trim($parts[2]);
                 $cover = isset($parts[3]) ? trim($parts[3]) : '';
 
-                // تشخیص آدرس MP3
                 if (!empty($urls)) {
                     $mp3Url = $urls[0];
                 } else {
@@ -217,13 +259,11 @@ class SimplePlayer_Plugin implements Typecho_Plugin_Interface
 
                 if (!preg_match('/^https?:\/\//i', $mp3Url)) continue;
 
-                // تشخیص آدرس کاور
                 if (empty($cover) && count($urls) > 1) {
                     $cover = $urls[1];
                 } elseif (!empty($cover) && preg_match('/^https?:\/\//i', $cover)) {
                     // ok
                 } else {
-                    // استفاده از تصویر پیش‌فرض SVG که در پوشه img قرار دارد
                     $defaultCoverUrl = Helper::options()->pluginUrl . '/SimplePlayer/img/default-cover.svg';
                     $cover = $defaultCoverUrl;
                 }
